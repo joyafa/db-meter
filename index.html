@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>分贝测试仪</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #0a0e1a;
+    --text: #e6ecff;
+    --muted: #8a93b8;
+    --accent: #4f8cff;
+    --accent-2: #00d4aa;
+    --warn: #ffb020;
+    --danger: #ff4d6d;
+    --green: #22c55e;
+    --border: #1f2740;
+  }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(900px 600px at 50% -10%, #161e3a 0%, var(--bg) 65%) no-repeat;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+  }
+  .app {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 12px 16px;
+    gap: 8px;
+  }
+  /* 顶栏 */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; color: var(--muted);
+  }
+  .topbar .title { font-weight: 700; color: var(--text); font-size: 15px; letter-spacing: 0.5px; }
+  .topbar .status { display: inline-flex; align-items: center; gap: 6px; }
+  .topbar .led { width: 7px; height: 7px; border-radius: 50%; background: #555; }
+  .topbar.active .led { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .sr { color: var(--muted); font-size: 11px; }
+
+  /* 仪表盘区域 */
+  .gauge-wrap {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 0;
+  }
+  canvas#gauge { display: block; }
+
+  /* 声音参考 */
+  .ref-line {
+    text-align: center; font-size: 13px; line-height: 1.5;
+    color: var(--muted); min-height: 20px;
+  }
+  .ref-line .icon { font-size: 16px; vertical-align: -2px; }
+  .ref-line .desc { color: var(--text); font-weight: 600; }
+  .ref-line .range { color: var(--muted); font-size: 11px; }
+
+  /* 统计 */
+  .stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .stat {
+    background: rgba(31,39,64,0.5); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 4px; text-align: center;
+  }
+  .stat .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .stat .val { font-size: 19px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  /* 校准 */
+  .calib {
+    display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--muted);
+  }
+  .calib input[type="range"] { flex: 1; accent-color: var(--accent); height: 4px; }
+  .calib .cv { color: var(--text); font-weight: 600; min-width: 52px; text-align: right; font-size: 11px; }
+
+  /* 按钮 */
+  .controls { display: flex; gap: 8px; }
+  button {
+    flex: 1; font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 11px 6px; border-radius: 10px; cursor: pointer;
+    border: 1px solid var(--border); background: rgba(31,39,64,0.6); color: var(--text);
+    transition: all 0.15s ease;
+  }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-stop { background: var(--danger); color: #fff; border-color: var(--danger); }
+
+  /* 结果页面 */
+  .result-page {
+    display: none;
+    position: fixed; inset: 0; z-index: 100;
+    background: radial-gradient(900px 600px at 50% -10%, #161e3a 0%, var(--bg) 65%) no-repeat;
+    color: var(--text);
+    overflow-y: auto;
+    padding: 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .result-page.show { display: block; }
+  .result-inner {
+    max-width: 560px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .result-head {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .result-head h2 { font-size: 18px; font-weight: 700; }
+  .result-head .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .result-card {
+    background: rgba(20,26,46,0.7); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px;
+  }
+  .result-card h3 {
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+  }
+  .result-stats {
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+  }
+  .result-stat {
+    background: rgba(13,19,38,0.6); border-radius: 8px; padding: 10px; text-align: center;
+  }
+  .result-stat .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .result-stat .val { font-size: 22px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .result-stat .unit { font-size: 11px; color: var(--muted); }
+  .result-canvas { display: block; width: 100%; border-radius: 8px; background: #0d1326; }
+  .result-dist { display: flex; align-items: flex-end; gap: 3px; height: 60px; }
+  .result-dist .bar {
+    flex: 1; border-radius: 3px 3px 0 0; min-height: 2px;
+    background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    transition: height 0.3s ease;
+  }
+  .result-dist-labels { display: flex; gap: 3px; margin-top: 4px; }
+  .result-dist-labels span { flex: 1; text-align: center; font-size: 8px; color: var(--muted); }
+  .result-actions { display: flex; gap: 8px; }
+  .result-actions button { flex: 1; }
+
+  /* 历史记录页面 */
+  .history-page {
+    display: none;
+    position: fixed; inset: 0; z-index: 100;
+    background: radial-gradient(900px 600px at 50% -10%, #161e3a 0%, var(--bg) 65%) no-repeat;
+    color: var(--text);
+    overflow-y: auto;
+    padding: 16px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .history-page.show { display: block; }
+  .history-inner {
+    max-width: 560px; margin: 0 auto;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .history-head {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .history-head h2 { font-size: 18px; font-weight: 700; }
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+  .history-item {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(20,26,46,0.7); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 14px; cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .history-item:active { background: rgba(31,39,64,0.9); }
+  .history-item .h-icon {
+    font-size: 22px; flex-shrink: 0; width: 36px; text-align: center;
+  }
+  .history-item .h-info { flex: 1; min-width: 0; }
+  .history-item .h-avg { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .history-item .h-avg .u { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .history-item .h-time { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .history-item .h-meta { font-size: 11px; color: var(--muted); }
+  .history-item .h-arrow { color: var(--muted); font-size: 18px; }
+  .history-empty {
+    text-align: center; color: var(--muted); padding: 40px 20px; font-size: 14px;
+  }
+  .history-clear {
+    flex: 0 0 auto; padding: 8px 16px; font-size: 12px;
+    border-color: var(--danger); color: var(--danger);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar" id="topbar">
+    <span class="title">分贝测试仪</span>
+    <span class="status"><span class="led"></span><span id="statusText">未启动</span> · <span class="sr" id="sampleRate">--</span></span>
+  </div>
+
+  <div class="gauge-wrap">
+    <canvas id="gauge"></canvas>
+  </div>
+
+  <div class="ref-line" id="refLine">
+    <span style="color:var(--muted)">点击开始测量</span>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="lbl">最大</div><div class="val" id="maxDb">--</div></div>
+    <div class="stat"><div class="lbl">最小</div><div class="val" id="minDb">--</div></div>
+    <div class="stat"><div class="lbl">平均</div><div class="val" id="avgDb">--</div></div>
+  </div>
+
+  <div class="calib">
+    <label>校准</label>
+    <input type="range" id="calib" min="80" max="120" step="1" value="93" />
+    <span class="cv" id="calibVal">+93 dB</span>
+  </div>
+
+  <div class="controls">
+    <button id="startBtn" class="btn-primary">开始测量</button>
+    <button id="simBtn">模拟</button>
+    <button id="stopBtn" class="btn-stop" disabled>停止</button>
+    <button id="resetBtn">重置</button>
+    <button id="historyBtn">历史</button>
+  </div>
+</div>
+
+<!-- 结果页面 -->
+<div class="result-page" id="resultPage">
+  <div class="result-inner">
+    <div class="result-head">
+      <div>
+        <h2>测试结果</h2>
+        <div class="sub" id="resultTime">--</div>
+      </div>
+      <button id="closeResultBtn" style="flex:0 0 auto;padding:8px 16px">返回</button>
+    </div>
+
+    <div class="result-card">
+      <h3>详细数据</h3>
+      <div class="result-stats">
+        <div class="result-stat"><div class="lbl">平均</div><div class="val" id="rAvg">--</div><div class="unit">dB</div></div>
+        <div class="result-stat"><div class="lbl">最大</div><div class="val" id="rMax">--</div><div class="unit">dB</div></div>
+        <div class="result-stat"><div class="lbl">最小</div><div class="val" id="rMin">--</div><div class="unit">dB</div></div>
+        <div class="result-stat"><div class="lbl">时长</div><div class="val" id="rDur">--</div><div class="unit">秒</div></div>
+      </div>
+    </div>
+
+    <div class="result-card">
+      <h3>分贝变化曲线</h3>
+      <canvas id="resultChart" class="result-canvas" height="180"></canvas>
+    </div>
+
+    <div class="result-card">
+      <h3>分贝分布</h3>
+      <div class="result-dist" id="resultDist"></div>
+      <div class="result-dist-labels" id="resultDistLabels"></div>
+    </div>
+
+    <div class="result-actions">
+      <button id="resultAgainBtn" class="btn-primary">再次测量</button>
+      <button id="resultSaveBtn">保存记录</button>
+      <button id="resultShareBtn">分享截图</button>
+    </div>
+  </div>
+</div>
+
+<!-- 历史记录页面 -->
+<div class="history-page" id="historyPage">
+  <div class="history-inner">
+    <div class="history-head">
+      <h2>历史记录</h2>
+      <button id="closeHistoryBtn" style="flex:0 0 auto;padding:8px 16px">返回</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty">暂无记录，完成测量后点击「保存记录」</div>
+    </div>
+    <button id="clearHistoryBtn" class="history-clear" style="display:none">清空所有记录</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  // DOM
+  const gauge = document.getElementById('gauge');
+  const gctx = gauge.getContext('2d');
+  const refLineEl = document.getElementById('refLine');
+  const maxDbEl = document.getElementById('maxDb');
+  const minDbEl = document.getElementById('minDb');
+  const avgDbEl = document.getElementById('avgDb');
+  const startBtn = document.getElementById('startBtn');
+  const simBtn = document.getElementById('simBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const calibEl = document.getElementById('calib');
+  const calibValEl = document.getElementById('calibVal');
+  const topbar = document.getElementById('topbar');
+  const statusTextEl = document.getElementById('statusText');
+  const sampleRateEl = document.getElementById('sampleRate');
+
+  // 结果页面 DOM
+  const resultPage = document.getElementById('resultPage');
+  const closeResultBtn = document.getElementById('closeResultBtn');
+  const resultAgainBtn = document.getElementById('resultAgainBtn');
+  const resultSaveBtn = document.getElementById('resultSaveBtn');
+  const resultShareBtn = document.getElementById('resultShareBtn');
+  const rAvg = document.getElementById('rAvg');
+  const rMax = document.getElementById('rMax');
+  const rMin = document.getElementById('rMin');
+  const rDur = document.getElementById('rDur');
+  const resultTime = document.getElementById('resultTime');
+  const resultChart = document.getElementById('resultChart');
+  const resultDist = document.getElementById('resultDist');
+  const resultDistLabels = document.getElementById('resultDistLabels');
+
+  // 历史记录 DOM
+  const historyBtn = document.getElementById('historyBtn');
+  const historyPage = document.getElementById('historyPage');
+  const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+  const historyList = document.getElementById('historyList');
+
+  let audioCtx = null, analyser = null, source = null, stream = null, simNodes = null;
+  let timeArr = null, freqFloat = null;
+  let running = false, rafId = null;
+  let calib = 93;
+  let maxDb = -Infinity, minDb = Infinity, sumDb = 0, countDb = 0;
+  let displayDb = 0; // 平滑后的显示值
+  let measureStartTs = 0;   // 测量开始时间戳
+  let measureEndTs = 0;     // 测量结束时间戳
+  const dbHistory = [];     // 采样历史：{t, db} 每 200ms 一个点
+  let lastSampleTs = 0;
+
+  // A 计权曲线（IEC 61672-1）
+  // 返回指定频率处的 A 计权增益（dB），1kHz 处为 0dB
+  function aWeightDB(f) {
+    if (f <= 0) return -1000;
+    const f2 = f * f;
+    const f4 = f2 * f2;
+    const num = 12194.0 * 12194.0 * f4;
+    const den = (f2 + 20.6 * 20.6) *
+                Math.sqrt((f2 + 107.7 * 107.7) * (f2 + 737.9 * 737.9)) *
+                (f2 + 12194.0 * 12194.0);
+    return 20 * Math.log10(num / den) + 2.0;
+  }
+
+  // 预计算每个频段的 A 计权线性增益（避免每帧重复计算）
+  let aWeightTable = null;
+  function buildAWeightTable(sampleRate, binCount) {
+    const binHz = sampleRate / (binCount * 2); // fftSize = binCount*2
+    aWeightTable = new Float32Array(binCount);
+    for (let i = 0; i < binCount; i++) {
+      const freq = i * (sampleRate / (binCount * 2));
+      aWeightTable[i] = Math.pow(10, aWeightDB(freq) / 20);
+    }
+  }
+
+  // 声音对照表
+  const SOUND_REF = [
+    { min: 0,  max: 10,  icon: '🤫', desc: '几乎无声' },
+    { min: 10, max: 20,  icon: '🍃', desc: '呼吸声' },
+    { min: 20, max: 30,  icon: '⏰', desc: '低语 / 钟表滴答' },
+    { min: 30, max: 40,  icon: '📖', desc: '安静卧室 / 图书馆' },
+    { min: 40, max: 50,  icon: '🧊', desc: '冰箱嗡嗡声' },
+    { min: 50, max: 60,  icon: '❄️', desc: '空调 / 小雨声' },
+    { min: 60, max: 70,  icon: '🗣️', desc: '正常对话 / 洗衣机' },
+    { min: 70, max: 80,  icon: '🚗', desc: '吸尘器 / 繁忙街道' },
+    { min: 80, max: 90,  icon: '🛵', desc: '摩托车 / 闹钟' },
+    { min: 90, max: 100, icon: '🚇', desc: '地铁 / 工厂车间' },
+    { min: 100,max: 110, icon: '📢', desc: '汽车喇叭 / 演唱会' },
+    { min: 110,max: 120, icon: '🪚', desc: '链锯 / 摇滚乐' },
+    { min: 120,max: 999, icon: '✈️', desc: '喷气式飞机起飞' },
+  ];
+
+  function refOf(db) {
+    return SOUND_REF.find(s => db >= s.min && db < s.max) || SOUND_REF[0];
+  }
+
+  // 仪表盘配置
+  // 弧从 135° 到 405°(=45°)，顺时针 270°
+  const A0 = 135;        // 起始角度(度)
+  const ASPAN = 270;     // 弧跨度
+  const DBMAX = 120;
+  function dbToAngle(db) {
+    return (A0 + (Math.max(0, Math.min(DBMAX, db)) / DBMAX) * ASPAN) * Math.PI / 180;
+  }
+
+  // 自适应尺寸
+  function resizeGauge() {
+    const wrap = gauge.parentElement;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.min(wrap.clientWidth, wrap.clientHeight);
+    const size = Math.max(220, w);
+    gauge.style.width = size + 'px';
+    gauge.style.height = size + 'px';
+    gauge.width = size * dpr;
+    gauge.height = size * dpr;
+    gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawGauge(displayDb);
+  }
+  window.addEventListener('resize', resizeGauge);
+
+  function drawGauge(db) {
+    const dpr = window.devicePixelRatio || 1;
+    const W = gauge.width / dpr;
+    const H = gauge.height / dpr;
+    const cx = W / 2, cy = H / 2;
+    const R = Math.min(W, H) / 2 - 6;
+
+    gctx.clearRect(0, 0, W, H);
+
+    const a0 = A0 * Math.PI / 180;
+    const a1 = (A0 + ASPAN) * Math.PI / 180;
+    const cur = dbToAngle(db);
+
+    // === 外圈金属边框 ===
+    const ringGrad = gctx.createRadialGradient(cx, cy - R * 0.1, R * 0.7, cx, cy, R);
+    ringGrad.addColorStop(0, '#2a3450');
+    ringGrad.addColorStop(0.5, '#0e1424');
+    ringGrad.addColorStop(1, '#1e2840');
+    gctx.fillStyle = ringGrad;
+    gctx.beginPath();
+    gctx.arc(cx, cy, R, 0, Math.PI * 2);
+    gctx.fill();
+
+    // 外圈高光
+    gctx.strokeStyle = 'rgba(120,140,200,0.3)';
+    gctx.lineWidth = 1.5;
+    gctx.beginPath();
+    gctx.arc(cx, cy, R - 1, 0, Math.PI * 2);
+    gctx.stroke();
+
+    // === 表盘内圈背景 ===
+    const dialGrad = gctx.createRadialGradient(cx, cy - R * 0.15, R * 0.1, cx, cy, R * 0.88);
+    dialGrad.addColorStop(0, '#1a2138');
+    dialGrad.addColorStop(0.6, '#0e1326');
+    dialGrad.addColorStop(1, '#080c18');
+    gctx.fillStyle = dialGrad;
+    gctx.beginPath();
+    gctx.arc(cx, cy, R * 0.88, 0, Math.PI * 2);
+    gctx.fill();
+
+    // === 彩色分段弧 ===
+    const arcWidth = R * 0.12;
+    const arcR = R * 0.76;
+    gctx.lineCap = 'butt';
+
+    // 背景轨道
+    gctx.lineWidth = arcWidth;
+    gctx.strokeStyle = '#0a0f1e';
+    gctx.beginPath();
+    gctx.arc(cx, cy, arcR, a0, a1);
+    gctx.stroke();
+
+    // 分段彩色弧（固定颜色段，不是渐变）
+    const segs = [
+      { from: 0, to: 40, color: '#22c55e' },
+      { from: 40, to: 70, color: '#3b82f6' },
+      { from: 70, to: 90, color: '#f59e0b' },
+      { from: 90, to: 120, color: '#ef4444' },
+    ];
+    gctx.lineWidth = arcWidth;
+    for (const seg of segs) {
+      const sa = dbToAngle(seg.from);
+      const ea = dbToAngle(seg.to);
+      gctx.strokeStyle = seg.color;
+      gctx.globalAlpha = 0.35;
+      gctx.beginPath();
+      gctx.arc(cx, cy, arcR, sa, ea);
+      gctx.stroke();
+    }
+    gctx.globalAlpha = 1;
+
+    // 激活弧（当前值填充，带发光）
+    for (const seg of segs) {
+      if (db < seg.from) continue;
+      const sa = dbToAngle(seg.from);
+      const ea = Math.min(dbToAngle(db), dbToAngle(seg.to));
+      gctx.strokeStyle = seg.color;
+      gctx.shadowColor = seg.color;
+      gctx.shadowBlur = 12;
+      gctx.beginPath();
+      gctx.arc(cx, cy, arcR, sa, ea);
+      gctx.stroke();
+    }
+    gctx.shadowBlur = 0;
+
+    // === 刻度线 ===
+    for (let v = 0; v <= DBMAX; v += 5) {
+      const a = dbToAngle(v);
+      const major = (v % 30 === 0);
+      const mid = (v % 10 === 0);
+      const ri = arcR - arcWidth / 2 - 3;
+      const ro = ri - (major ? 16 : mid ? 10 : 6);
+      gctx.lineWidth = major ? 2.5 : mid ? 1.5 : 1;
+      gctx.strokeStyle = major ? '#c8d0e8' : mid ? '#6a7396' : '#3a4566';
+      gctx.beginPath();
+      gctx.moveTo(cx + Math.cos(a) * ri, cy + Math.sin(a) * ri);
+      gctx.lineTo(cx + Math.cos(a) * ro, cy + Math.sin(a) * ro);
+      gctx.stroke();
+      if (major) {
+        gctx.fillStyle = '#c8d0e8';
+        gctx.font = '600 ' + (R * 0.075) + 'px sans-serif';
+        gctx.textAlign = 'center';
+        gctx.textBaseline = 'middle';
+        const tr = ro - 14;
+        gctx.fillText(String(v), cx + Math.cos(a) * tr, cy + Math.sin(a) * tr);
+      }
+    }
+
+    // === 红色危险区标记 ===
+    const dangerA0 = dbToAngle(90);
+    const dangerA1 = dbToAngle(120);
+    gctx.strokeStyle = 'rgba(239,68,68,0.15)';
+    gctx.lineWidth = arcWidth + 8;
+    gctx.beginPath();
+    gctx.arc(cx, cy, arcR, dangerA0, dangerA1);
+    gctx.stroke();
+
+    // === 指针 ===
+    const pl = arcR - arcWidth / 2 - 2;
+    gctx.save();
+    gctx.translate(cx, cy);
+    gctx.rotate(cur);
+    // 指针阴影
+    gctx.shadowColor = 'rgba(0,0,0,0.5)';
+    gctx.shadowBlur = 8;
+    gctx.shadowOffsetX = 2;
+    gctx.shadowOffsetY = 2;
+    // 指针主体（红色细长三角形）
+    gctx.fillStyle = '#ff4444';
+    gctx.beginPath();
+    gctx.moveTo(-8, 0);
+    gctx.lineTo(0, -2.5);
+    gctx.lineTo(pl, 0);
+    gctx.lineTo(0, 2.5);
+    gctx.closePath();
+    gctx.fill();
+    // 指针高光
+    gctx.shadowBlur = 0;
+    gctx.fillStyle = '#ff8888';
+    gctx.beginPath();
+    gctx.moveTo(-8, 0);
+    gctx.lineTo(0, -1);
+    gctx.lineTo(pl * 0.7, 0);
+    gctx.lineTo(0, 1);
+    gctx.closePath();
+    gctx.fill();
+    gctx.restore();
+
+    // === 中心轴帽 ===
+    gctx.shadowBlur = 0;
+    // 外环
+    const capGrad = gctx.createRadialGradient(cx, cy - 3, 2, cx, cy, R * 0.12);
+    capGrad.addColorStop(0, '#5a6488');
+    capGrad.addColorStop(0.5, '#2a3450');
+    capGrad.addColorStop(1, '#0e1424');
+    gctx.fillStyle = capGrad;
+    gctx.beginPath();
+    gctx.arc(cx, cy, R * 0.12, 0, Math.PI * 2);
+    gctx.fill();
+    gctx.strokeStyle = 'rgba(120,140,200,0.4)';
+    gctx.lineWidth = 1;
+    gctx.stroke();
+    // 内圆
+    gctx.fillStyle = '#0a0e1a';
+    gctx.beginPath();
+    gctx.arc(cx, cy, R * 0.05, 0, Math.PI * 2);
+    gctx.fill();
+
+    // === 中心数值 ===
+    gctx.fillStyle = levelColor(db) === '#22c55e' ? '#4ade80' : levelColor(db) === '#3b82f6' ? '#60a5fa' : levelColor(db) === '#f59e0b' ? '#fbbf24' : '#f87171';
+    gctx.textAlign = 'center';
+    gctx.textBaseline = 'middle';
+    gctx.font = '800 ' + (R * 0.26) + 'px -apple-system, sans-serif';
+    gctx.shadowColor = 'rgba(0,0,0,0.5)';
+    gctx.shadowBlur = 4;
+    gctx.fillText(db.toFixed(1), cx, cy + R * 0.34);
+    gctx.shadowBlur = 0;
+    gctx.fillStyle = '#8a93b8';
+    gctx.font = '600 ' + (R * 0.08) + 'px sans-serif';
+    gctx.fillText('dB(A)', cx, cy + R * 0.5);
+
+    // === 底部品牌 ===
+    gctx.fillStyle = '#4a5680';
+    gctx.font = '500 ' + (R * 0.06) + 'px sans-serif';
+    gctx.fillText('SOUND LEVEL METER', cx, cy + R * 0.66);
+  }
+
+  function levelColor(db) {
+    if (db < 40) return '#22c55e';
+    if (db < 70) return '#3b82f6';
+    if (db < 90) return '#f59e0b';
+    return '#ef4444';
+  }
+
+  function tick() {
+    if (!running) return;
+    analyser.getByteTimeDomainData(timeArr);
+    analyser.getFloatFrequencyData(freqFloat);
+
+    // 1. 时域 RMS（可靠，系数已知正确）
+    let sumSq = 0;
+    for (let i = 0; i < timeArr.length; i++) {
+      const v = (timeArr[i] - 128) / 128;
+      sumSq += v * v;
+    }
+    const rmsFlat = Math.sqrt(sumSq / timeArr.length);
+
+    // 2. 频域 A 计权修正系数（相对值，Parseval 系数自动抵消）
+    let eWeighted = 0, eFlat = 0;
+    for (let i = 1; i < freqFloat.length; i++) {
+      const dBFS = freqFloat[i];
+      if (dBFS === -Infinity || isNaN(dBFS)) continue;
+      const power = Math.pow(10, dBFS / 10); // 频域能量 = 10^(dBFS/10)
+      eFlat += power;
+      const w = aWeightTable[i];
+      eWeighted += power * w * w;
+    }
+    // A 计权修正 dB：计权后能量 / 计权前能量
+    const correctionDB = (eFlat > 0 && eWeighted > 0)
+      ? 10 * Math.log10(eWeighted / eFlat) : 0;
+
+    // 3. 最终分贝 = 时域 dBFS + 校准 + A 计权修正
+    const db = rmsFlat > 0 ? (20 * Math.log10(rmsFlat) + calib + correctionDB) : 0;
+    const dbC = Math.max(0, Math.min(DBMAX, db));
+
+    // 平滑显示
+    displayDb = displayDb * 0.7 + dbC * 0.3;
+
+    drawGauge(displayDb);
+
+    // 统计
+    if (dbC > maxDb) maxDb = dbC;
+    if (dbC < minDb) minDb = dbC;
+    sumDb += dbC; countDb++;
+    maxDbEl.textContent = maxDb.toFixed(1);
+    minDbEl.textContent = minDb.toFixed(1);
+    avgDbEl.textContent = (sumDb / countDb).toFixed(1);
+
+    // 声音参考
+    const r = refOf(dbC);
+    refLineEl.innerHTML = `<span class="icon">${r.icon}</span> <span class="desc">${r.desc}</span> <span class="range">${r.min}-${r.max} dB</span>`;
+
+    // 采样历史：每 200ms 记录一个点
+    const nowTs = performance.now();
+    if (nowTs - lastSampleTs >= 200) {
+      dbHistory.push({ t: (nowTs - measureStartTs) / 1000, db: dbC });
+      lastSampleTs = nowTs;
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  async function start() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('当前环境不支持麦克风访问。请使用「模拟」按钮体验功能。');
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+    } catch (e) {
+      alert('无法访问麦克风：' + e.message + '\n可使用「模拟」按钮体验。');
+      return;
+    }
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    source = audioCtx.createMediaStreamSource(stream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.6;
+    source.connect(analyser);
+    timeArr = new Uint8Array(analyser.fftSize);
+    freqFloat = new Float32Array(analyser.frequencyBinCount);
+    buildAWeightTable(audioCtx.sampleRate, analyser.frequencyBinCount);
+
+    sampleRateEl.textContent = audioCtx.sampleRate + 'Hz';
+    running = true;
+    measureStartTs = performance.now();
+    lastSampleTs = 0;
+    dbHistory.length = 0;
+    rafId = requestAnimationFrame(tick);
+    startBtn.disabled = true; simBtn.disabled = true; stopBtn.disabled = false;
+    topbar.classList.add('active'); statusTextEl.textContent = '测量中';
+  }
+
+  function startSimulation() {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) { alert('无法创建音频上下文：' + e.message); return; }
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.7;
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buf; noise.loop = true;
+    const gain = audioCtx.createGain(); gain.gain.value = 0.35;
+    const lfo = audioCtx.createOscillator(); lfo.frequency.value = 0.3;
+    const lfoG = audioCtx.createGain(); lfoG.gain.value = 0.25;
+    lfo.connect(lfoG); lfoG.connect(gain.gain);
+    noise.connect(gain);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.75;
+    gain.connect(analyser);
+    noise.start(); lfo.start();
+    simNodes = { noise, lfo };
+    timeArr = new Uint8Array(analyser.fftSize);
+    freqFloat = new Float32Array(analyser.frequencyBinCount);
+    buildAWeightTable(audioCtx.sampleRate, analyser.frequencyBinCount);
+
+    sampleRateEl.textContent = audioCtx.sampleRate + 'Hz·模拟';
+    running = true;
+    measureStartTs = performance.now();
+    lastSampleTs = 0;
+    dbHistory.length = 0;
+    rafId = requestAnimationFrame(tick);
+    startBtn.disabled = true; simBtn.disabled = true; stopBtn.disabled = false;
+    topbar.classList.add('active'); statusTextEl.textContent = '模拟中';
+  }
+
+  function stop() {
+    if (!running) return;
+    running = false;
+    measureEndTs = performance.now();
+    if (rafId) cancelAnimationFrame(rafId);
+    if (source) { try { source.disconnect(); } catch(e){} }
+    if (simNodes) { try { simNodes.noise.stop(); } catch(e){} try { simNodes.lfo.stop(); } catch(e){} simNodes = null; }
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (audioCtx) { try { audioCtx.close(); } catch(e){} }
+    audioCtx = null; analyser = null; source = null; stream = null;
+    startBtn.disabled = false; simBtn.disabled = false; stopBtn.disabled = true;
+    topbar.classList.remove('active'); statusTextEl.textContent = '已停止';
+    // 显示结果页面
+    if (dbHistory.length > 0) showResults();
+  }
+
+  function reset() {
+    maxDb = -Infinity; minDb = Infinity; sumDb = 0, countDb = 0;
+    displayDb = 0;
+    dbHistory.length = 0;
+    maxDbEl.textContent = '--'; minDbEl.textContent = '--'; avgDbEl.textContent = '--';
+    refLineEl.innerHTML = '<span style="color:var(--muted)">点击开始测量</span>';
+    drawGauge(0);
+  }
+
+  // === 结果页面渲染 ===
+  // currentRecord: 从历史记录查看时传入，否则为 null（用当前测量数据）
+  let currentRecord = null;
+
+  function showResults(rec) {
+    currentRecord = rec || null;
+    const data = rec || {
+      avg: countDb > 0 ? (sumDb / countDb) : 0,
+      max: maxDb,
+      min: minDb,
+      dur: (measureEndTs - measureStartTs) / 1000,
+      time: new Date(),
+      history: dbHistory.slice(),
+    };
+
+    resultTime.textContent = data.time.toLocaleString('zh-CN', { hour12: false });
+    rAvg.textContent = data.avg.toFixed(1);
+    rMax.textContent = data.max.toFixed(1);
+    rMin.textContent = data.min.toFixed(1);
+    rDur.textContent = data.dur.toFixed(1);
+
+    // 保存按钮只在当前测量结果时显示，历史查看时隐藏
+    resultSaveBtn.style.display = rec ? 'none' : '';
+    // 用 data.history 填充临时数组供 drawResultChart/drawResultDist 使用
+    const _dbHist = rec ? data.history : dbHistory;
+    drawResultChart(_dbHist);
+    drawResultDist(_dbHist);
+    resultPage.classList.add('show');
+  }
+
+  function drawResultChart(hist) {
+    const data = hist || dbHistory;
+    const dpr = window.devicePixelRatio || 1;
+    const w = resultChart.parentElement.clientWidth - 28;
+    const h = 180;
+    resultChart.style.width = w + 'px';
+    resultChart.style.height = h + 'px';
+    resultChart.width = w * dpr;
+    resultChart.height = h * dpr;
+    const ctx = resultChart.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    if (data.length < 2) {
+      ctx.fillStyle = '#8a93b8';
+      ctx.font = '13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('数据不足', w / 2, h / 2);
+      return;
+    }
+
+    const tMax = data[data.length - 1].t;
+    const dbLo = 0, dbHi = 120;
+
+    // 背景网格
+    ctx.strokeStyle = '#1b2238';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = (h / 4) * i;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    // Y 轴标签
+    ctx.fillStyle = '#8a93b8';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'left';
+    for (let v = 0; v <= 120; v += 30) {
+      const y = h - (v / 120) * h;
+      ctx.fillText(String(v), 2, y - 2);
+    }
+
+    // 填充区域
+    ctx.beginPath();
+    ctx.moveTo(0, h);
+    for (let i = 0; i < data.length; i++) {
+      const p = data[i];
+      const x = (p.t / tMax) * w;
+      const y = h - (Math.max(dbLo, Math.min(dbHi, p.db)) / 120) * h;
+      if (i === 0) ctx.lineTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(79,140,255,0.4)');
+    grad.addColorStop(1, 'rgba(79,140,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // 曲线
+    ctx.strokeStyle = '#00d4aa';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < data.length; i++) {
+      const p = data[i];
+      const x = (p.t / tMax) * w;
+      const y = h - (Math.max(dbLo, Math.min(dbHi, p.db)) / 120) * h;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // X 轴标签
+    ctx.fillStyle = '#8a93b8';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('0s', 10, h - 2);
+    ctx.fillText(tMax.toFixed(1) + 's', w - 15, h - 2);
+  }
+
+  function drawResultDist(hist) {
+    const data = hist || dbHistory;
+    // 0-120 dB 分 12 段，每段 10 dB
+    const bins = new Array(12).fill(0);
+    for (const p of data) {
+      const idx = Math.min(11, Math.floor(p.db / 10));
+      if (idx >= 0) bins[idx]++;
+    }
+    const maxCount = Math.max(...bins, 1);
+    resultDist.innerHTML = '';
+    resultDistLabels.innerHTML = '';
+    const colors = ['#22c55e','#22c55e','#3b82f6','#3b82f6','#3b82f6','#f59e0b','#f59e0b','#f59e0b','#ef4444','#ef4444','#ef4444','#ef4444'];
+    bins.forEach((c, i) => {
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.style.height = ((c / maxCount) * 100) + '%';
+      bar.style.background = colors[i];
+      resultDist.appendChild(bar);
+      const lbl = document.createElement('span');
+      lbl.textContent = (i * 10) + '-' + (i * 10 + 10);
+      resultDistLabels.appendChild(lbl);
+    });
+  }
+
+  function closeResults() {
+    resultPage.classList.remove('show');
+  }
+
+  startBtn.addEventListener('click', start);
+  simBtn.addEventListener('click', startSimulation);
+  stopBtn.addEventListener('click', stop);
+  resetBtn.addEventListener('click', reset);
+  closeResultBtn.addEventListener('click', closeResults);
+  resultAgainBtn.addEventListener('click', () => { closeResults(); reset(); });
+  resultSaveBtn.addEventListener('click', () => {
+    const rec = {
+      id: Date.now(),
+      time: new Date(),
+      avg: countDb > 0 ? (sumDb / countDb) : 0,
+      max: maxDb,
+      min: minDb,
+      dur: (measureEndTs - measureStartTs) / 1000,
+      history: dbHistory.slice(),
+    };
+    saveRecord(rec);
+    resultSaveBtn.disabled = true;
+    resultSaveBtn.textContent = '已保存';
+    setTimeout(() => { resultSaveBtn.disabled = false; resultSaveBtn.textContent = '保存记录'; }, 2000);
+  });
+  resultShareBtn.addEventListener('click', () => {
+    shareResult();
+  });
+  calibEl.addEventListener('input', () => {
+    calib = parseInt(calibEl.value, 10);
+    calibValEl.textContent = '+' + calib + ' dB';
+  });
+
+  // === 分享截图：将整个结果页面渲染为一张图片 ===
+  function shareResult() {
+    const data = currentRecord || {
+      avg: countDb > 0 ? (sumDb / countDb) : 0,
+      max: maxDb,
+      min: minDb,
+      dur: (measureEndTs - measureStartTs) / 1000,
+      time: new Date(),
+      history: dbHistory.slice(),
+    };
+
+    // 创建合成 Canvas
+    const SHARE_W = 540;
+    const PAD = 20;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = 2;
+    canvas.width = SHARE_W * dpr;
+    canvas.height = 780 * dpr;
+    ctx.scale(dpr, dpr);
+
+    // 背景
+    const bgGrad = ctx.createLinearGradient(0, 0, 0, 780);
+    bgGrad.addColorStop(0, '#161e3a');
+    bgGrad.addColorStop(1, '#0a0e1a');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, SHARE_W, 780);
+
+    let y = 24;
+
+    // 标题
+    ctx.fillStyle = '#e6ecff';
+    ctx.font = '700 20px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('分贝测试结果', PAD, y + 8);
+    ctx.fillStyle = '#8a93b8';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(data.time.toLocaleString('zh-CN', { hour12: false }), SHARE_W - PAD, y + 8);
+    y += 36;
+
+    // 四格统计
+    const cellW = (SHARE_W - PAD * 2 - 8 * 3) / 4;
+    const stats = [
+      { lbl: '平均', val: data.avg.toFixed(1) },
+      { lbl: '最大', val: data.max.toFixed(1) },
+      { lbl: '最小', val: data.min.toFixed(1) },
+      { lbl: '时长', val: data.dur.toFixed(0) + 's' },
+    ];
+    stats.forEach((s, i) => {
+      const x = PAD + i * (cellW + 8);
+      ctx.fillStyle = 'rgba(13,19,38,0.8)';
+      roundRect(ctx, x, y, cellW, 56, 8);
+      ctx.fill();
+      ctx.fillStyle = '#8a93b8';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(s.lbl, x + cellW / 2, y + 18);
+      ctx.fillStyle = '#e6ecff';
+      ctx.font = '700 18px sans-serif';
+      ctx.fillText(s.val, x + cellW / 2, y + 42);
+    });
+    y += 70;
+
+    // 曲线标题
+    ctx.fillStyle = '#8a93b8';
+    ctx.font = '600 11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('分贝变化曲线', PAD, y + 4);
+    y += 18;
+
+    // 绘制曲线到合成 Canvas
+    const chartH = 160;
+    const chartW = SHARE_W - PAD * 2;
+    drawChartToContext(ctx, data.history, PAD, y, chartW, chartH);
+    y += chartH + 18;
+
+    // 分布标题
+    ctx.fillStyle = '#8a93b8';
+    ctx.font = '600 11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('分贝分布', PAD, y + 4);
+    y += 18;
+
+    // 绘制分布柱状图
+    drawDistToContext(ctx, data.history, PAD, y, chartW, 60);
+    y += 80;
+
+    // 底部
+    ctx.fillStyle = '#8a93b8';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('分贝测试仪 · dBA(A计权)', SHARE_W / 2, 780 - 16);
+
+    // 转为 Blob 并分享/下载
+    canvas.toBlob((blob) => {
+      if (!blob) { alert('截图生成失败'); return; }
+      const file = new File([blob], 'db-result-' + Date.now() + '.png', { type: 'image/png' });
+
+      // 优先使用 Web Share API（Android WebView / 浏览器支持时）
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({
+          files: [file],
+          title: '分贝测试结果',
+          text: '平均 ' + data.avg.toFixed(1) + ' dB, 最大 ' + data.max.toFixed(1) + ' dB'
+        }).catch(() => {});
+      } else {
+        // 降级：触发下载
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+      }
+    }, 'image/png');
+  }
+
+  // 辅助：圆角矩形
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // 绘制曲线到指定 context
+  function drawChartToContext(ctx, hist, ox, oy, w, h) {
+    // 背景
+    ctx.fillStyle = '#0d1326';
+    roundRect(ctx, ox, oy, w, h, 8);
+    ctx.fill();
+
+    const data = hist && hist.length > 0 ? hist : [];
+    if (data.length < 2) {
+      ctx.fillStyle = '#8a93b8';
+      ctx.font = '13px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('数据不足', ox + w / 2, oy + h / 2);
+      return;
+    }
+
+    const tMax = data[data.length - 1].t;
+    // 网格
+    ctx.strokeStyle = '#1b2238';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const yy = oy + (h / 4) * i;
+      ctx.beginPath(); ctx.moveTo(ox, yy); ctx.lineTo(ox + w, yy); ctx.stroke();
+    }
+    // Y 标签
+    ctx.fillStyle = '#8a93b8';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'left';
+    for (let v = 0; v <= 120; v += 30) {
+      const yy = oy + h - (v / 120) * h;
+      ctx.fillText(String(v), ox + 2, yy - 2);
+    }
+    // 填充
+    ctx.beginPath();
+    ctx.moveTo(ox, oy + h);
+    for (let i = 0; i < data.length; i++) {
+      const p = data[i];
+      const xx = ox + (p.t / tMax) * w;
+      const yy = oy + h - (Math.max(0, Math.min(120, p.db)) / 120) * h;
+      if (i === 0) ctx.lineTo(xx, yy); else ctx.lineTo(xx, yy);
+    }
+    ctx.lineTo(ox + w, oy + h);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, oy, 0, oy + h);
+    grad.addColorStop(0, 'rgba(79,140,255,0.4)');
+    grad.addColorStop(1, 'rgba(79,140,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    // 曲线
+    ctx.strokeStyle = '#00d4aa';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < data.length; i++) {
+      const p = data[i];
+      const xx = ox + (p.t / tMax) * w;
+      const yy = oy + h - (Math.max(0, Math.min(120, p.db)) / 120) * h;
+      if (i === 0) ctx.moveTo(xx, yy); else ctx.lineTo(xx, yy);
+    }
+    ctx.stroke();
+  }
+
+  // 绘制分布柱状图到指定 context
+  function drawDistToContext(ctx, hist, ox, oy, w, h) {
+    ctx.fillStyle = '#0d1326';
+    roundRect(ctx, ox, oy, w, h, 8);
+    ctx.fill();
+
+    const data = hist || [];
+    const bins = new Array(12).fill(0);
+    for (const p of data) {
+      const idx = Math.min(11, Math.floor(p.db / 10));
+      if (idx >= 0) bins[idx]++;
+    }
+    const maxCount = Math.max(...bins, 1);
+    const colors = ['#22c55e','#22c55e','#3b82f6','#3b82f6','#3b82f6','#f59e0b','#f59e0b','#f59e0b','#ef4444','#ef4444','#ef4444','#ef4444'];
+    const barW = (w - 8) / 12;
+    const gap = 2;
+    bins.forEach((c, i) => {
+      const bh = (c / maxCount) * (h - 4);
+      const bx = ox + 4 + i * barW;
+      const by = oy + h - bh - 2;
+      ctx.fillStyle = colors[i];
+      roundRect(ctx, bx + gap/2, by, barW - gap, Math.max(bh, 2), 2);
+      ctx.fill();
+    });
+  }
+
+  // === 历史记录（localStorage 持久化）===
+  const STORAGE_KEY = 'dbmeter_history';
+
+  function loadRecords() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      // 时间字段还原为 Date 对象
+      arr.forEach(r => { r.time = new Date(r.time); });
+      return arr;
+    } catch (e) { return []; }
+  }
+
+  function saveRecords(arr) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+    } catch (e) {
+      alert('存储空间不足，无法保存。');
+    }
+  }
+
+  function saveRecord(rec) {
+    const arr = loadRecords();
+    arr.unshift(rec);
+    // 限制最多 50 条
+    if (arr.length > 50) arr.length = 50;
+    saveRecords(arr);
+  }
+
+  function renderHistoryList() {
+    const arr = loadRecords();
+    if (arr.length === 0) {
+      historyList.innerHTML = '<div class="history-empty">暂无记录，完成测量后点击「保存记录」</div>';
+      clearHistoryBtn.style.display = 'none';
+      return;
+    }
+    clearHistoryBtn.style.display = '';
+    historyList.innerHTML = '';
+    arr.forEach((rec) => {
+      const r = refOf(rec.avg);
+      const item = document.createElement('div');
+      item.className = 'history-item';
+      item.innerHTML = `
+        <span class="h-icon">${r.icon}</span>
+        <div class="h-info">
+          <div class="h-avg">${rec.avg.toFixed(1)}<span class="u"> dB</span></div>
+          <div class="h-time">${rec.time.toLocaleString('zh-CN', { hour12: false })}</div>
+        </div>
+        <div class="h-meta">最大${rec.max.toFixed(0)} · ${rec.dur.toFixed(0)}s</div>
+        <span class="h-arrow">›</span>
+      `;
+      item.addEventListener('click', () => {
+        closeHistory();
+        showResults(rec);
+      });
+      historyList.appendChild(item);
+    });
+  }
+
+  function openHistory() {
+    renderHistoryList();
+    historyPage.classList.add('show');
+  }
+
+  function closeHistory() {
+    historyPage.classList.remove('show');
+  }
+
+  historyBtn.addEventListener('click', openHistory);
+  closeHistoryBtn.addEventListener('click', closeHistory);
+  clearHistoryBtn.addEventListener('click', () => {
+    if (confirm('确定清空所有历史记录？')) {
+      localStorage.removeItem(STORAGE_KEY);
+      renderHistoryList();
+    }
+  });
+
+  resizeGauge();
+})();
+</script>
+</body>
+</html>
